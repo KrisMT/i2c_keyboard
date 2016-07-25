@@ -6,7 +6,7 @@ CC=avr-gcc
 CFLAGS=-g -Os -Wall -mcall-prologues -mmcu=$(MCU) -DF_CPU=$(F_CPU)
 OBJ2HEX=avr-objcopy
 AVRDUDE=avrdude
-TARGET=avr
+TARGET=firmware
 
 all:
 	$(CC) $(CFLAGS) $(TARGET).c -o $(TARGET)

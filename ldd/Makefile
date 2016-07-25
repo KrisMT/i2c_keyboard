@@ -2,12 +2,12 @@ file = avr_keys
 obj-m += $(file).o
 
 all:
-	make -C /usr/src/linux-headers-4.4.13-v7+ M=$(PWD) modules
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
 clean:
-	make -C /usr/src/linux-headers-4.4.13-v7+ M=$(PWD) clean
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 
-ismod:
+insmod:
 	sudo insmod $(file).ko
 
 rmmod:

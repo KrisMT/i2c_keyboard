@@ -5,14 +5,18 @@
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 
-#define I2C_ID 0x10
+#define I2C_ID 0x0F
 
 struct avr_kpad {
 	struct i2c_client *client;
 	struct input_dev *input;
 	struct delayed_work work;
 	unsigned long delay;
+
+	unsigned char buff[256];
 };
+
+struct avr_kpad *gkpad;
 
 static int avr_kpad_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
@@ -20,11 +24,26 @@ static int avr_kpad_probe(struct i2c_client *client, const struct i2c_device_id 
 	struct input_dev *input;
 	int error;
 
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA)) {
+		dev_err(&client->dev, "SMBUS Byte Data not Supported\n");
+		return -EIO;
+	}
+
 	kpad = kzalloc(sizeof(struct avr_kpad), GFP_KERNEL);
-	input = input_allocate_device();
-	if( !kpad || !input ) {
+
+	if( !kpad ) {
+		dev_err(&client->dev, "Cann't allocate kpad\n");
 		error = -ENOMEM;
-		goto free_mem;
+		goto free_kpad;
+	}
+
+	gkpad = kpad;
+
+	input = input_allocate_device();
+	if( !input ) {
+		dev_err(&client->dev, "Cann't allocate input device\n");
+		error = -ENOMEM;
+		goto free_input;
 	}
 
 	kpad->client = client;
@@ -43,37 +62,47 @@ static int avr_kpad_probe(struct i2c_client *client, const struct i2c_device_id 
 	error = input_register_device(input);
 	if( error ) {
 		dev_err(&client->dev, "unable to register input device\n");
-		goto free_mem;
+		goto unregis_input;
 	}
 
 	device_init_wakeup(&client->dev, 1);
 	i2c_set_clientdata(client, kpad);
 	
-	dev_info(&client->dev, "Rev.%d keypad\n", 0x01);
+	dev_info(&client->dev, "Proved device 0x%02X on I2C BUS\n", client->addr);
+/*
+	dev_info(&client->dev, "Test read at 0xC0: 0x%02X \n", i2c_smbus_read_byte_data(client, 0xC0) );
+	i2c_smbus_write_byte_data(client, 0x00, 0x4b);
+	dev_info(&client->dev, "Test read at 0x00: 0x%02X \n", i2c_smbus_read_byte_data(client, 0x00) );
+	//i2c_master_recv(client, kpad->buff, 256);
+*/
 	return 0;
 
-	
-
-//unreg_dev:
-	//input_unregister_device(input);
-free_mem:
+unregis_input:
+	input_unregister_device(input);
+free_input:
 	input_free_device(input);
+free_kpad:
 	kfree(kpad);
 	return error;
 }
 
+/*
+ * Driver remove
+ */
 static int avr_kpad_remove(struct i2c_client *client)
 {
 	struct avr_kpad *kpad = i2c_get_clientdata(client);
 
+	dev_info(&client->dev, "Removed device 0x%02X from I2C BUS\n", client->addr);
 	input_unregister_device(kpad->input);
+	input_free_device(kpad->input);
 	kfree(kpad);
 
 	return 0;
 }
 
 static const struct i2c_device_id avr_id[] = {
-	{ "avr-keys", 0 },
+	{ "avr_keys", 0 },
 	{ }
 };
 
@@ -81,7 +110,7 @@ MODULE_DEVICE_TABLE(i2c, avr_id);
 
 static struct i2c_driver avr_driver = {
 	.driver = {
-		.name = KBUILD_MODNAME,
+		.name = "avr_keys",
 	},
 	.probe	= avr_kpad_probe,
 	.remove = avr_kpad_remove,
@@ -90,19 +119,44 @@ static struct i2c_driver avr_driver = {
 
 static struct i2c_board_info avr_kpad_board_info[] __initdata = {
 	{
-		I2C_BOARD_INFO("avr-keys", I2C_ID),
+	.type = "avr_keys",
+	.addr = I2C_ID,
 	},
+	{ }
 };
+
+/*
+ * Driver init
+ */
 
 static int __init avr_kpad_init(void)
 {
-	i2c_register_board_info(1, avr_kpad_board_info, ARRAY_SIZE(avr_kpad_board_info));
-	i2c_add_driver( &avr_driver );
+	struct i2c_client *client;
+	struct i2c_adapter *adapter;
+	int ret;
+
+	adapter = i2c_get_adapter(1);
+	printk("Detected Adapter 0x%08X\n", (unsigned int)adapter);
+
+	client = i2c_new_device(adapter, avr_kpad_board_info);
+	dev_info(&client->dev,"Detected client addr 0x%02X\n", client->addr);
+
+	ret = i2c_add_driver( &avr_driver );
+	if( ret < 0) {
+		printk("Init cann't add driver to I2C device 0x%02X\n", client->addr);
+
+	}
 	return 0;
 }
 
+/*
+ * Driver exit
+ */
 static void __exit avr_kpad_exit(void)
 {
+	struct i2c_client *client = gkpad->client;
+	i2c_unregister_device( client );
+	i2c_del_driver( &avr_driver );
 }
 
 module_init( avr_kpad_init );
@@ -111,4 +165,3 @@ module_exit( avr_kpad_exit );
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("KrisMT <>");
 MODULE_DESCRIPTION("AVR I2C Keypad driver");
-
