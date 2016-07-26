@@ -13,22 +13,46 @@ struct avr_kpad {
 	struct delayed_work work;
 	unsigned long delay;
 
-	unsigned char buff[256];
+	//Key event buffer
+	unsigned char buff[16];
 };
+
+//struct timer_list time;
 
 struct avr_kpad *gkpad;
 
+/*
+void avr_kpad_report(unsigned long para)
+{
+	input_report_key(input, key, 1);
+	input_sync(input);
+	input_report_key(input, key, 0);
+	input_sync(input);
+
+	mod_timer(&timer, jiffies);
+
+}
+*/
+
+//Delayed work or timer
+
+
+/*************************
+ *
+ * I@C Proved function
+ */
 static int avr_kpad_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	struct avr_kpad *kpad;
 	struct input_dev *input;
 	int error;
+	int i;
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA)) {
 		dev_err(&client->dev, "SMBUS Byte Data not Supported\n");
 		return -EIO;
 	}
-
+	
 	kpad = kzalloc(sizeof(struct avr_kpad), GFP_KERNEL);
 
 	if( !kpad ) {
@@ -55,9 +79,14 @@ static int avr_kpad_probe(struct i2c_client *client, const struct i2c_device_id 
 
 	input_set_drvdata(input, kpad);
 	input->id.bustype = BUS_I2C;
-	input->id.vendor = 0xDECA;
+	input->id.vendor = 0xFADE;
 	input->id.product = 0x0001;
 	input->id.version = 0x01;
+
+	input->evbit[0] = BIT_MASK(EV_KEY);
+	for (i=0; i<256; i++)
+		set_bit(i, input->keybit);
+	clear_bit(0, input->keybit);
 
 	error = input_register_device(input);
 	if( error ) {
@@ -70,10 +99,10 @@ static int avr_kpad_probe(struct i2c_client *client, const struct i2c_device_id 
 	
 	dev_info(&client->dev, "Proved device 0x%02X on I2C BUS\n", client->addr);
 /*
-	dev_info(&client->dev, "Test read at 0xC0: 0x%02X \n", i2c_smbus_read_byte_data(client, 0xC0) );
-	i2c_smbus_write_byte_data(client, 0x00, 0x4b);
-	dev_info(&client->dev, "Test read at 0x00: 0x%02X \n", i2c_smbus_read_byte_data(client, 0x00) );
-	//i2c_master_recv(client, kpad->buff, 256);
+	init_timer(&timer);
+	timer.expires = jiffies + HZ;
+	timer.function = avr_kpad_report;
+	add_timer(&timer);
 */
 	return 0;
 
@@ -136,14 +165,14 @@ static int __init avr_kpad_init(void)
 	int ret;
 
 	adapter = i2c_get_adapter(1);
-	printk("Detected Adapter 0x%08X\n", (unsigned int)adapter);
+	dev_info(&adapter->dev, "Get I2C adapter\n");
 
 	client = i2c_new_device(adapter, avr_kpad_board_info);
 	dev_info(&client->dev,"Detected client addr 0x%02X\n", client->addr);
 
 	ret = i2c_add_driver( &avr_driver );
 	if( ret < 0) {
-		printk("Init cann't add driver to I2C device 0x%02X\n", client->addr);
+		dev_err(&client->dev, "Init cann't add driver to I2C device 0x%02X\n", client->addr);
 
 	}
 	return 0;
@@ -163,5 +192,5 @@ module_init( avr_kpad_init );
 module_exit( avr_kpad_exit );
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("KrisMT <>");
+MODULE_AUTHOR("KrisMT <ratiodetector{[00at00]}hotmail.com>");
 MODULE_DESCRIPTION("AVR I2C Keypad driver");
