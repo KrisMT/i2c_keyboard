@@ -45,7 +45,7 @@ void matrix_scan()
   unsigned char i;
   unsigned char data;
 
-  //_delay_ms(20); //#include<util/delay.h>
+  _delay_ms(160); //#include<util/delay.h>
   for(i=0; i<MATRIX_ROWS; i++)
   {
     data = read_row(i);
@@ -154,13 +154,13 @@ void take_action(keyboard_t* record)
         report.keys[KC_BSLASH>>3] |= keys_mask[KC_BSLASH & 0x07];
         break;
       case KC_MUTE:
-        report.key = 0xA4;
+        report.key = 0x7F;
         break;
       case KC_VOLU:
-        report.key = 0x18;
+        report.key = 0x80;
         break;
       case KC_VOLD:
-        report.key = 0x19;
+        report.key = 0x81;
         break;
 
       case 0xE0 ... 0xE7:   //Modified key
@@ -203,7 +203,7 @@ void take_tri_layer(keyboard_t* record)
   else if(LOWER_key) record->curr_layer = 1;
   else               record->curr_layer = 0;
 
-  //Take LED layer PB3 ~ PB0
+  //Show layer to Port D
   layer = record->layer[record->curr_layer];
   out_led(layer);
 }
@@ -233,7 +233,6 @@ keyboard_t record = {
 
 void keyboard_task(volatile unsigned char *buff)
 {
-  //unsigned char i, j;
   matrix_scan();
   matrix_debounce();
   take_tri_layer(&record);
@@ -241,11 +240,4 @@ void keyboard_task(volatile unsigned char *buff)
   take_action(&record);
   swap_matrix();
   memcpy((void*)buff, &report, 16);
-  /*
-  for( i=0; i<MATRIX_ROWS; i++)
-    for( j=0; j<MATRIX_COLS; j++)
-    {
-      buff[0x80 + i*16 + j] = matrix_debounced[i*MATRIX_ROWS + j];
-    }
-  */
 }
